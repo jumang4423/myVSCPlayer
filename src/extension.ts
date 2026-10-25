@@ -364,6 +364,13 @@ class AudioSession {
           }
 
           await fs.mkdir(destDir, { recursive: true });
+          const memo = path.join(destDir, "MEMO.md");
+          try {
+            /* wx = create only; an existing MEMO.md is never touched. */
+            await fs.writeFile(memo, "", { flag: "wx" });
+          } catch {
+            /* already there */
+          }
           const names: string[] = [];
           for (const stem of stems) {
             const target = await uniquePath(path.join(destDir, path.basename(stem)));

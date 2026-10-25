@@ -67,8 +67,9 @@ If another extension already claims audio files, right-click the file →
 1. Press **SEP** (left of `LOOP`) — the panel goes into range mode.
 2. Drag across the waveform. On release, that range is separated.
 3. Results land in `<songname>_separated/` next to the audio file:
-   `vocals.wav`, `drums.wav`, `bass.wav`, `other.wav`.
-   Later runs never overwrite: they write `vocals_2.wav`, `vocals_3.wav`, …
+   `vocals.wav`, `drums.wav`, `bass.wav`, `other.wav`, plus an empty `MEMO.md` for notes.
+   Later runs never overwrite: they write `vocals_2.wav`, `vocals_3.wav`, … (and leave an
+   existing `MEMO.md` alone).
 
 Pipeline: `ffmpeg -ss A -to B` cuts the range to a temp wav → `demucs -n htdemucs -o <tmp>` →
 the four stems are copied into place, and the temp directory is removed. `Esc` clears the
