@@ -20,9 +20,21 @@ if (!audioPath || !outDir) {
 const mediaDir = resolve(import.meta.dirname, "..", "media");
 mkdirSync(outDir, { recursive: true });
 
+const ext = (audioPath.match(/\.[^.\\/]+$/) || [".mp3"])[0].toLowerCase();
+const MIME = {
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".flac": "audio/flac",
+  ".m4a": "audio/mp4",
+  ".ogg": "audio/ogg",
+  ".opus": "audio/ogg",
+  ".aac": "audio/aac",
+};
+const servedName = `audio${ext}`;
+
 copyFileSync(join(mediaDir, "player.js"), join(outDir, "player.js"));
 copyFileSync(join(mediaDir, "player.css"), join(outDir, "player.css"));
-copyFileSync(resolve(audioPath), join(outDir, "audio.mp3"));
+copyFileSync(resolve(audioPath), join(outDir, servedName));
 
 const name = basename(audioPath);
 const stub = `<script>
@@ -40,9 +52,9 @@ const stub = `<script>
           index: 1,
           count: 6,
           name: ${JSON.stringify(name)},
-          mime: "audio/mpeg",
+          mime: ${JSON.stringify(MIME[ext] || "audio/mpeg")},
           autoplay: false,
-          url: "audio.mp3",
+          url: ${JSON.stringify(servedName)},
         },
         "*",
       );

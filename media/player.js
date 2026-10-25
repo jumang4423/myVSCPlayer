@@ -39,6 +39,12 @@ let decodeToken = 0;
 audio.volume = volume;
 audio.playbackRate = rate;
 audio.loop = looping;
+
+/* Tape-style speed: the pitch moves with the rate instead of being time-stretched. */
+audio.preservesPitch = false;
+audio.mozPreservesPitch = false;
+audio.webkitPreservesPitch = false;
+
 ui.volume.value = String(volume);
 ui.rate.value = String(rate);
 ui.loop.classList.toggle("active", looping);
@@ -268,6 +274,9 @@ ui.loop.addEventListener("click", () => {
 
 ui.rate.addEventListener("change", () => {
   rate = Number(ui.rate.value) || 1;
+  audio.preservesPitch = false;
+  audio.mozPreservesPitch = false;
+  audio.webkitPreservesPitch = false;
   audio.playbackRate = rate;
   persist();
 });

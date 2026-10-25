@@ -12,6 +12,8 @@ status bar — instead of the built-in one-line `<audio>` control.
 - **Folder queue** — prev/next walk the other audio files in the same folder (name-sorted,
   numeric-aware), auto-advance on track end
 - **Transport** — play/pause, ±5s seek, speed 0.5x–2x, loop, volume
+- **Speed moves the pitch** — playback is tape-style (`preservesPitch = false`), so 2x sounds an
+  octave up instead of being time-stretched; 0.5x drops an octave
 - **Keyboard** — `Space` `←` `→` `↑` `↓` `N` `P` `L` `Home` `End`
 - **Status bar** — shows the current track, click to reveal the player
 - **Persistence** — volume, speed and loop survive reopening the tab
