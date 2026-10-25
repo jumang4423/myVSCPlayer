@@ -2,7 +2,7 @@
   "name": "myvscplayer",
   "displayName": "myVSCPlayer",
   "description": "Audio player inside VS Code: waveform seek, folder queue, keyboard transport, status bar.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "jumang4423",
   "license": "MIT",
   "repository": {
@@ -115,6 +115,23 @@
           "type": "string",
           "default": "htdemucs",
           "description": "Demucs model, e.g. `htdemucs`, `htdemucs_ft`, `mdx_extra`."
+        },
+        "myVSCPlayer.demucsDevice": {
+          "type": "string",
+          "default": "",
+          "enum": [
+            "",
+            "cpu",
+            "mps",
+            "cuda"
+          ],
+          "enumDescriptions": [
+            "Let demucs pick (CUDA when available, otherwise CPU).",
+            "Force CPU.",
+            "Apple Silicon GPU (MPS). Works on M1/M2/M3, but is not faster than CPU for htdemucs.",
+            "Force CUDA."
+          ],
+          "description": "Device passed to demucs as `-d`. Leave empty for demucs' default."
         },
         "myVSCPlayer.ffmpegPath": {
           "type": "string",

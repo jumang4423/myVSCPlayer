@@ -289,6 +289,7 @@ class AudioSession {
     const config = vscode.workspace.getConfiguration("myVSCPlayer");
     const demucs = (config.get<string>("demucsCommand", "demucs") || "demucs").trim();
     const model = (config.get<string>("stemModel", "htdemucs") || "htdemucs").trim();
+    const device = (config.get<string>("demucsDevice", "") || "").trim();
     const ffmpeg = (config.get<string>("ffmpegPath", "ffmpeg") || "ffmpeg").trim();
 
     const songDir = path.dirname(track.uri.fsPath);
@@ -338,10 +339,23 @@ class AudioSession {
           const [command, ...preArgs] = demucs.split(/\s+/);
           await runCommand(
             command,
-            [...preArgs, "-n", model, "-o", outRoot, region],
+            [
+              ...preArgs,
+              ...(device ? ["-d", device] : []),
+              "-n",
+              model,
+              "-o",
+              outRoot,
+              region,
+            ],
             token,
             progress,
           );
+
+          const sliced = await fs.stat(region).catch(() => undefined);
+          if (!sliced || sliced.size < 44100 * 2 * 0.5) {
+            throw new Error("the selected range produced almost no audio");
+          }
 
           const stems = await collectStems(outRoot);
           if (stems.length === 0) {
@@ -415,6 +429,20 @@ function fmtClock(seconds: number): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
+function searchPath(): string {
+  /* The extension host inherits launchd's PATH, not the login shell's, so
+     demucs (~/.local/bin) and ffmpeg (/opt/homebrew/bin) need to be added. */
+  const extra = [
+    path.join(os.homedir(), ".local", "bin"),
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "/usr/bin",
+    "/bin",
+  ];
+  const current = (process.env.PATH || "").split(":").filter(Boolean);
+  return Array.from(new Set([...current, ...extra])).join(":");
+}
+
 function runCommand(
   command: string,
   args: string[],
@@ -423,14 +451,16 @@ function runCommand(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     log?.appendLine(`$ ${command} ${args.join(" ")}`);
-    const child = spawn(command, args, { env: process.env });
+    const child = spawn(command, args, {
+      env: { ...process.env, PATH: searchPath() },
+    });
     let lastLine = "";
 
     const onData = (chunk: Buffer): void => {
       const text = chunk.toString();
       log?.append(text);
       const lines = text
-        .split(/\r?\n/)
+        .split(/[\r\n]+/)
         .map((line) => line.trim())
         .filter(Boolean);
       const line = lines[lines.length - 1];
@@ -465,7 +495,8 @@ function runCommand(
       } else if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`${path.basename(command)} exited with code ${code}`));
+        const detail = lastLine ? `: ${lastLine}` : "";
+        reject(new Error(`${path.basename(command)} exited with code ${code}${detail}`));
       }
     });
   });

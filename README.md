@@ -72,15 +72,28 @@ Pipeline: `ffmpeg -ss A -to B` cuts the range to a temp wav → `demucs -n htdem
 the four stems are copied into place, and the temp directory is removed. `Esc` clears the
 selection and leaves range mode.
 
-Requirements:
+Requirements (Apple Silicon):
 
 ```sh
-pipx install demucs        # or python3 -m pip install --user demucs
+# arm64 native build; torch/torchaudio are pinned because demucs 4.0.1
+# predates the torchaudio API change and torch 2.x needs numpy<2
+uv tool install demucs \
+  --with "torch==2.0.0" --with "torchaudio==2.0.0" \
+  --with "numpy<2" --with "setuptools<81"
+
 brew install ffmpeg        # ffmpeg must be on PATH
 ```
 
+Measured on an M1 Pro (12 s of stereo 44.1 kHz): **CPU 16 s**, `-d mps` 20 s. MPS runs
+(some ops fall back to CPU), but CPU is faster for htdemucs, so `myVSCPlayer.demucsDevice`
+defaults to empty (= demucs' own default, i.e. CPU on macOS). Set it to `mps` if you want to
+experiment with the GPU.
+
+The extension host does not inherit your login shell's `PATH`, so `~/.local/bin`,
+`/opt/homebrew/bin` and `/usr/local/bin` are appended before spawning ffmpeg/demucs.
+
 Settings: `myVSCPlayer.demucsCommand` (default `demucs`, also accepts `python3 -m demucs`),
-`myVSCPlayer.stemModel` (default `htdemucs`), `myVSCPlayer.ffmpegPath` (default `ffmpeg`).
+`myVSCPlayer.stemModel` (default `htdemucs`), `myVSCPlayer.demucsDevice`, `myVSCPlayer.ffmpegPath`.
 Only local files are supported; separation is skipped for remote/virtual documents.
 
 ## How it works
