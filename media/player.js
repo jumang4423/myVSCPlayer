@@ -5,6 +5,8 @@ const audio = new Audio();
 audio.preload = "auto";
 
 const ui = {
+  title: document.getElementById("title"),
+  artist: document.getElementById("artist"),
   play: document.getElementById("play"),
   prev: document.getElementById("prev"),
   next: document.getElementById("next"),
@@ -26,6 +28,7 @@ let rate = typeof saved.rate === "number" ? saved.rate : 1;
 let looping = saved.loop === true;
 
 let peaks = null;
+let waveGain = 1;
 let segments = [];
 let streamDur = 0;
 let coverage = 0;
@@ -73,8 +76,18 @@ function persist() {
   vscode.setState({ volume, rate, loop: looping });
 }
 
-function setState(state, message) {
-  document.body.dataset.state = state;
+/* "01 - Artist - Title.mp3" becomes title/artist like a SoundCloud row. */
+function describe(name, album) {
+  const base = String(name || "").replace(/\.[^.]+$/, "");
+  const cleaned = base.replace(/^[0-9]{1,3}[\s._-]+/, "").trim();
+  const parts = cleaned.split(/\s+[-–—]\s+/);
+  if (parts.length >= 2) {
+    return { title: parts.slice(1).join(" - ").trim(), artist: parts[0].trim() };
+  }
+  return { title: cleaned || "myVSCPlayer", artist: album || "" };
+}
+
+function setState(state, message) {  document.body.dataset.state = state;
   if (message) {
     ui.hint.textContent = message;
   }
@@ -154,6 +167,28 @@ function rebuildPeaks() {
     }
   }
   peaks = out;
+  updateGain();
+}
+
+/* Normalise the drawing to the track's own peak (99.5th percentile, so one stray
+   click does not flatten everything), like SoundCloud does. */
+function updateGain() {
+  if (!peaks) {
+    waveGain = 1;
+    return;
+  }
+  const amplitudes = [];
+  for (let i = 0; i < peaks.length; i += 2) {
+    amplitudes.push((peaks[i + 1] - peaks[i]) / 2);
+  }
+  if (amplitudes.length === 0) {
+    waveGain = 1;
+    return;
+  }
+  amplitudes.sort((a, b) => a - b);
+  const reference =
+    amplitudes[Math.min(amplitudes.length - 1, Math.floor(amplitudes.length * 0.98))] || 0;
+  waveGain = reference > 0.01 ? Math.min(1 / reference, 25) : 1;
 }
 
 function resizeCanvas() {
@@ -181,7 +216,6 @@ function draw(progress) {
   }
   const width = ui.canvas.clientWidth;
   const height = ui.canvas.clientHeight;
-  const mid = height / 2;
   ctx.clearRect(0, 0, width, height);
 
   const base = themeColor("--bar", "#6e7681");
@@ -190,27 +224,43 @@ function draw(progress) {
   if (!peaks) {
     ctx.fillStyle = base;
     ctx.globalAlpha = 0.35;
-    ctx.fillRect(0, Math.round(mid), width, 1);
+    ctx.fillRect(0, height - 1, width, 1);
     ctx.globalAlpha = 1;
     drawSelection(ctx, width, height);
     return;
   }
 
-  const scale = (height / 2) * 0.92;
+  /* SoundCloud style: the baseline is the bottom edge and bars grow upward. */
+  const scale = height * 0.94;
   const playedCols = Math.floor(columns * Math.min(1, Math.max(0, progress)));
   const ready = Math.max(1, Math.ceil(columns * Math.min(1, coverage)));
 
   for (let col = 0; col < ready; col += 1) {
     const min = peaks[col * 2];
     const max = peaks[col * 2 + 1];
-    const top = mid - max * scale;
-    const bottom = mid - min * scale;
-    const barHeight = Math.max(2, bottom - top);
+    const amplitude = Math.min(1, ((max - min) / 2) * waveGain) ** 0.78;
+    const barHeight = Math.max(2, amplitude * scale);
+    const y = height - barHeight;
+    const x = col * (BAR + GAP);
     ctx.fillStyle = col <= playedCols ? played : base;
-    ctx.fillRect(col * (BAR + GAP), mid - barHeight / 2, BAR, barHeight);
+    if (ctx.roundRect) {
+      ctx.beginPath();
+      ctx.roundRect(x, y, BAR, barHeight, BAR / 2);
+      ctx.fill();
+    } else {
+      ctx.fillRect(x, y, BAR, barHeight);
+    }
   }
 
   drawSelection(ctx, width, height);
+
+  if (progress > 0 && progress < 1) {
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = played;
+    ctx.fillRect(Math.round(width * progress), 0, 1, height);
+    ctx.restore();
+  }
 }
 
 function drawSelection(ctx, width, height) {
@@ -328,8 +378,7 @@ function startSeparation(from, to) {
 audio.addEventListener("play", () => {
   setPlaying(true);
   startTicking();
-  post("status", { name: currentName, playing: true });
-});
+  post("status", { name: currentName, playing: true });});
 
 audio.addEventListener("pause", () => {
   setPlaying(false);
@@ -640,6 +689,10 @@ async function loadTrack(payload) {  const source = sourceOf(payload);
   queueIndex = payload.index || 0;
   queueCount = payload.count || 1;
   currentName = payload.name || "myVSCPlayer";
+  const described = describe(payload.name, payload.album);
+  ui.title.textContent = described.title;
+  ui.artist.textContent = described.artist;
+  document.title = described.title;
   selA = null;
   selB = null;
   stopSelecting();

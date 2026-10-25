@@ -229,6 +229,7 @@ class AudioSession {
       index,
       count: this.tracks.length,
       name: track.name,
+      album: path.basename(path.dirname(track.uri.fsPath)),
       mime: MIME[path.extname(track.name).toLowerCase()] ?? "audio/mpeg",
       autoplay,
     };

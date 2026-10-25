@@ -7,9 +7,10 @@ status bar — instead of the built-in one-line `<audio>` control.
 ## Features
 
 - **Custom editor for audio files** — `.mp3 .wav .flac .m4a .m4b .aac .ogg .oga .opus .aiff .aif .weba`
-- **Waveform** — drawn from the decoded samples, click or drag anywhere to seek, playhead
-  coloured against the elapsed portion. The file is streamed and decoded in 512 KB slices, so
-  the first pixels land in a fraction of a second and the rest fills in as it decodes
+- **Waveform** — SoundCloud-style bars that grow from the bottom edge, click or drag anywhere
+  to seek, played portion in orange. Each track is normalised to its own peak (98th percentile,
+  mild power curve) so quiet tracks do not draw as a flat line. The file is streamed and decoded
+  in 512 KB slices, so the first pixels land in a fraction of a second
 - **Folder queue** — prev/next walk the other audio files in the same folder (name-sorted,
   numeric-aware), auto-advance on track end
 - **Transport** — play/pause, ±5s seek, speed 0.5x–2x, loop, volume
@@ -117,6 +118,10 @@ reduction is cheap), and the bins are re-mapped onto the current canvas width on
 resize. Measured on a 21 MB / 22:29 mp3: **first pixels ≈ 0.3 s, complete waveform ≈ 1.8 s**
 (previously the panel stayed empty until the whole file had decoded). Formats other than mp3/wav,
 and `data:` sources, fall back to a single full decode.
+
+Bars are drawn from the bottom edge upward. Amplitude is normalised per track: the gain is
+`1 / (98th percentile of the half peak-to-peak amplitude)`, capped at 25×, then the bar height is
+`amplitude ** 0.78` so mid-level detail stays visible instead of hugging the baseline.
 
 ## Limitations
 
