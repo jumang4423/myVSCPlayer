@@ -31,6 +31,14 @@ code --install-extension myvscplayer-0.1.0.vsix
 
 Or press `F5` in VS Code with this folder open to run the extension host.
 
+To check the webview layout without launching VS Code, render the real files in a browser:
+
+```sh
+node test/preview.mjs "/path/to/track.mp3" /tmp/myvsc-preview
+cd /tmp/myvsc-preview && python3 -m http.server 8765
+# open http://127.0.0.1:8765/index.html
+```
+
 If another extension already claims audio files, right-click the file →
 **Reopen Editor With… → myVSCPlayer**, or pin it in `settings.json`:
 
@@ -50,18 +58,21 @@ If another extension already claims audio files, right-click the file →
 
 ## How it works
 
-`src/extension.ts` registers a `CustomReadonlyEditorProvider` for `myVSCPlayer.audio`. When a
-webview asks for a track, the extension host reads the bytes with `vscode.workspace.fs.readFile`
-and posts them into the webview, which plays them from a `Blob` URL and decodes a copy with
-`AudioContext.decodeAudioData` to build the waveform. Nothing is written to disk and no network
-is used.
+`src/extension.ts` registers a `CustomReadonlyEditorProvider` for `myVSCPlayer.audio`.
+
+- **Local files** are streamed straight from disk: the extension host adds the file's folder to
+  `localResourceRoots` and hands the webview a `webview.asWebviewUri` URL, so the browser engine
+  range-requests the audio instead of copying it.
+- **Remote / virtual file systems** (`vscode-remote`, etc.) cannot be reached by the local webview,
+  so the bytes are read with `vscode.workspace.fs.readFile` and posted as base64.
+- The waveform is built from `AudioContext.decodeAudioData` on a copy of the same source; nothing
+  is written to disk and no network is used.
 
 ## Limitations
 
 - One panel plays at a time; opening a second file pauses nothing automatically yet
-- Waveform redraws only on load, so resizing the panel needs a reopen
 - No playlist file support (`.m3u`) yet, no tags/cover art yet
-- Seeking is whole-file in memory: very large files are read entirely
+- Remote sessions send the whole file as base64, which is heavy for very large files
 
 ## Roadmap
 

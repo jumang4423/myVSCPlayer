@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="{{CSP}}" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="stylesheet" href="{{STYLE}}" />
+<title>myVSCPlayer</title>
+</head>
+<body data-state="empty">
+  <header class="track">
+    <div class="text">
+      <h1 id="title">myVSCPlayer</h1>
+      <p id="meta">no audio loaded</p>
+    </div>
+    <span id="queue" class="chip" hidden></span>
+  </header>
+
+  <section id="stage" class="stage">
+    <canvas id="wave"></canvas>
+    <div id="hint" class="hint">waiting for audio…</div>
+    <div id="tip" class="tip" hidden></div>
+  </section>
+
+  <footer class="transport">
+    <div class="group">
+      <button id="prev" class="icon" title="Previous (P)" aria-label="Previous">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6h2.2v12H7z"/><path d="M18 6.4v11.2L9.6 12z"/></svg>
+      </button>
+      <button id="play" class="play" title="Play / pause (Space)" aria-label="Play">
+        <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6L19 12z"/></svg>
+        <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z"/></svg>
+      </button>
+      <button id="next" class="icon" title="Next (N)" aria-label="Next">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.8 6H17v12h-2.2z"/><path d="M6 6.4v11.2L14.4 12z"/></svg>
+      </button>
+    </div>
+
+    <div class="clock">
+      <span id="elapsed">0:00</span>
+      <span class="dim">/</span>
+      <span id="total" class="dim">0:00</span>
+    </div>
+
+    <div class="group right">
+      <button id="loop" class="pill" title="Loop (L)">LOOP</button>
+      <select id="rate" title="Speed">
+        <option value="0.5">0.5x</option>
+        <option value="0.75">0.75x</option>
+        <option value="1" selected>1x</option>
+        <option value="1.25">1.25x</option>
+        <option value="1.5">1.5x</option>
+        <option value="2">2x</option>
+      </select>
+      <div class="volume">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.4h3.3L12 5.5v13L7.3 14.6H4z"/><path d="M15 9.2a3.9 3.9 0 0 1 0 5.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <input id="volume" type="range" min="0" max="1" step="0.01" value="1" title="Volume (up / down arrows)" />
+      </div>
+    </div>
+  </footer>
+
+  <script nonce="{{NONCE}}" src="{{SCRIPT}}"></script>
+</body>
+</html>

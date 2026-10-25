@@ -16,6 +16,21 @@ const AUDIO_EXTENSIONS = new Set([
   ".weba",
 ]);
 
+const MIME: Record<string, string> = {
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".flac": "audio/flac",
+  ".m4a": "audio/mp4",
+  ".m4b": "audio/mp4",
+  ".aac": "audio/aac",
+  ".ogg": "audio/ogg",
+  ".oga": "audio/ogg",
+  ".opus": "audio/ogg",
+  ".aiff": "audio/aiff",
+  ".aif": "audio/aiff",
+  ".weba": "audio/webm",
+};
+
 const VIEW_TYPE = "myVSCPlayer.audio";
 
 interface TrackEntry {
@@ -98,9 +113,14 @@ class AudioSession {
 
   async start(): Promise<void> {
     const webview = this.panel.webview;
+    const folder = this.sourceUri.with({ path: path.posix.dirname(this.sourceUri.path) });
+
     webview.options = {
       enableScripts: true,
-      localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, "media")],
+      localResourceRoots: [
+        vscode.Uri.joinPath(this.context.extensionUri, "media"),
+        ...(this.sourceUri.scheme === "file" ? [folder] : []),
+      ],
     };
 
     webview.onDidReceiveMessage(async (message: unknown) => {
@@ -108,7 +128,6 @@ class AudioSession {
         return;
       }
       const msg = message as { type?: string; index?: number; name?: string; playing?: boolean };
-
       switch (msg.type) {
         case "ready":
           await this.loadInitial();
@@ -124,16 +143,17 @@ class AudioSession {
       }
     });
 
-    webview.html = this.html(webview);
+    webview.html = await this.html(webview);
     this.panel.title = path.basename(this.sourceUri.fsPath);
   }
 
-  private html(webview: vscode.Webview): string {
+  private async html(webview: vscode.Webview): Promise<string> {
     const nonce = Array.from({ length: 32 }, () =>
       "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".charAt(
         Math.floor(Math.random() * 62),
       ),
     ).join("");
+
     const scriptUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.context.extensionUri, "media", "player.js"),
     );
@@ -141,59 +161,23 @@ class AudioSession {
       vscode.Uri.joinPath(this.context.extensionUri, "media", "player.css"),
     );
 
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data: blob:; media-src blob: data:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<link rel="stylesheet" href="${styleUri}" />
-<title>myVSCPlayer</title>
-</head>
-<body>
-  <header class="bar">
-    <div class="title">
-      <span id="track-name">Loading…</span>
-      <span id="track-meta" class="meta"></span>
-    </div>
-    <div class="badges">
-      <span id="track-index" class="badge"></span>
-    </div>
-  </header>
+    const csp = [
+      "default-src 'none'",
+      `img-src ${webview.cspSource} data:`,
+      `media-src ${webview.cspSource} data: blob:`,
+      `connect-src ${webview.cspSource} data:`,
+      `style-src ${webview.cspSource}`,
+      `script-src 'nonce-${nonce}'`,
+    ].join("; ");
 
-  <section class="wave">
-    <canvas id="wave"></canvas>
-    <div id="wave-hint" class="hint">decoding…</div>
-  </section>
-
-  <footer class="bar controls">
-    <div class="group">
-      <button id="prev" class="icon" title="Previous (P)">⏮</button>
-      <button id="play" class="icon play" title="Play / pause (Space)">▶</button>
-      <button id="next" class="icon" title="Next (N)">⏭</button>
-    </div>
-    <div class="group">
-      <span id="time">0:00</span>
-      <span class="sep">/</span>
-      <span id="duration">0:00</span>
-    </div>
-    <div class="group">
-      <button id="loop" class="icon" title="Loop (L)">⟲</button>
-      <select id="rate" title="Speed">
-        <option value="0.5">0.5x</option>
-        <option value="0.75">0.75x</option>
-        <option value="1" selected>1x</option>
-        <option value="1.25">1.25x</option>
-        <option value="1.5">1.5x</option>
-        <option value="2">2x</option>
-      </select>
-      <input id="volume" type="range" min="0" max="1" step="0.01" value="1" title="Volume (↑ / ↓)" />
-    </div>
-  </footer>
-
-  <script nonce="${nonce}" src="${scriptUri}"></script>
-</body>
-</html>`;
+    const templatePath = vscode.Uri.joinPath(this.context.extensionUri, "media", "player.html");
+    const raw = await vscode.workspace.fs.readFile(templatePath);
+    return Buffer.from(raw)
+      .toString("utf8")
+      .replace("{{CSP}}", csp)
+      .replace("{{NONCE}}", nonce)
+      .replace("{{STYLE}}", styleUri.toString())
+      .replace("{{SCRIPT}}", scriptUri.toString());
   }
 
   private async loadInitial(): Promise<void> {
@@ -219,20 +203,35 @@ class AudioSession {
     if (!track) {
       return;
     }
+
+    const base = {
+      type: "track",
+      index,
+      count: this.tracks.length,
+      name: track.name,
+      mime: MIME[path.extname(track.name).toLowerCase()] ?? "audio/mpeg",
+      autoplay,
+    };
+
     try {
-      const bytes = await vscode.workspace.fs.readFile(track.uri);
-      void this.panel.webview.postMessage({
-        type: "track",
-        index,
-        count: this.tracks.length,
-        name: track.name,
-        autoplay,
-        bytes,
-      });
+      if (track.uri.scheme === "file") {
+        /* Stream straight from disk: the webview gets a range-capable URL. */
+        await this.panel.webview.postMessage({
+          ...base,
+          url: this.panel.webview.asWebviewUri(track.uri).toString(),
+        });
+      } else {
+        /* Remote / virtual file systems: hand the bytes over as base64. */
+        const bytes = await vscode.workspace.fs.readFile(track.uri);
+        await this.panel.webview.postMessage({
+          ...base,
+          data: Buffer.from(bytes).toString("base64"),
+        });
+      }
       this.panel.title = track.name;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      void this.panel.webview.postMessage({ type: "error", message });
+      await this.panel.webview.postMessage({ type: "error", message });
     }
   }
 
@@ -263,9 +262,14 @@ class AudioSession {
     }
 
     const tracks = listing
-      .filter(([name, kind]) => kind === vscode.FileType.File && AUDIO_EXTENSIONS.has(path.extname(name).toLowerCase()))
+      .filter(
+        ([name, kind]) =>
+          kind === vscode.FileType.File && AUDIO_EXTENSIONS.has(path.extname(name).toLowerCase()),
+      )
       .map(([name]) => ({ uri: vscode.Uri.joinPath(folder, name), name }))
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+      .sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }),
+      );
 
     return tracks.length > 0 ? tracks : single;
   }

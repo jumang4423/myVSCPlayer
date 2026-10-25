@@ -2,7 +2,7 @@
   "name": "myvscplayer",
   "displayName": "myVSCPlayer",
   "description": "Audio player inside VS Code: waveform seek, folder queue, keyboard transport, status bar.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "jumang4423",
   "license": "MIT",
   "repository": {
@@ -37,21 +37,51 @@
         "displayName": "myVSCPlayer",
         "priority": "default",
         "selector": [
-          { "filenamePattern": "*.mp3" },
-          { "filenamePattern": "*.MP3" },
-          { "filenamePattern": "*.wav" },
-          { "filenamePattern": "*.WAV" },
-          { "filenamePattern": "*.flac" },
-          { "filenamePattern": "*.FLAC" },
-          { "filenamePattern": "*.m4a" },
-          { "filenamePattern": "*.M4A" },
-          { "filenamePattern": "*.aac" },
-          { "filenamePattern": "*.ogg" },
-          { "filenamePattern": "*.oga" },
-          { "filenamePattern": "*.opus" },
-          { "filenamePattern": "*.aiff" },
-          { "filenamePattern": "*.aif" },
-          { "filenamePattern": "*.weba" }
+          {
+            "filenamePattern": "*.mp3"
+          },
+          {
+            "filenamePattern": "*.MP3"
+          },
+          {
+            "filenamePattern": "*.wav"
+          },
+          {
+            "filenamePattern": "*.WAV"
+          },
+          {
+            "filenamePattern": "*.flac"
+          },
+          {
+            "filenamePattern": "*.FLAC"
+          },
+          {
+            "filenamePattern": "*.m4a"
+          },
+          {
+            "filenamePattern": "*.M4A"
+          },
+          {
+            "filenamePattern": "*.aac"
+          },
+          {
+            "filenamePattern": "*.ogg"
+          },
+          {
+            "filenamePattern": "*.oga"
+          },
+          {
+            "filenamePattern": "*.opus"
+          },
+          {
+            "filenamePattern": "*.aiff"
+          },
+          {
+            "filenamePattern": "*.aif"
+          },
+          {
+            "filenamePattern": "*.weba"
+          }
         ]
       }
     ],
@@ -65,7 +95,10 @@
         },
         "myVSCPlayer.queueMode": {
           "type": "string",
-          "enum": ["folder", "single"],
+          "enum": [
+            "folder",
+            "single"
+          ],
           "enumDescriptions": [
             "Prev/next walks every audio file in the same folder.",
             "Disable the queue; prev/next do nothing."
