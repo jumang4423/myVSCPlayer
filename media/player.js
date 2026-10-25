@@ -9,6 +9,7 @@ const ui = {
   prev: document.getElementById("prev"),
   next: document.getElementById("next"),
   loop: document.getElementById("loop"),
+  sep: document.getElementById("sep"),
   rate: document.getElementById("rate"),
   volume: document.getElementById("volume"),
   elapsed: document.getElementById("elapsed"),
@@ -31,6 +32,10 @@ let queueCount = 0;
 let queueIndex = 0;
 let currentName = "myVSCPlayer";
 let dragging = false;
+let selecting = false;
+let separating = false;
+let selA = null;
+let selB = null;
 let frame = 0;
 let decodeToken = 0;
 
@@ -142,6 +147,7 @@ function draw(progress) {
     ctx.globalAlpha = 0.35;
     ctx.fillRect(0, Math.round(mid), width, 1);
     ctx.globalAlpha = 1;
+    drawSelection(ctx, width, height);
     return;
   }
 
@@ -157,6 +163,29 @@ function draw(progress) {
     ctx.fillStyle = col <= playedCols ? played : base;
     ctx.fillRect(col * (BAR + GAP), mid - barHeight / 2, BAR, barHeight);
   }
+
+  drawSelection(ctx, width, height);
+}
+
+function drawSelection(ctx, width, height) {
+  const duration = audio.duration || 0;
+  if (selA === null || selB === null || duration <= 0) {
+    return;
+  }
+  const from = Math.min(selA, selB) / duration;
+  const to = Math.max(selA, selB) / duration;
+  const x1 = Math.max(0, Math.min(width, from * width));
+  const x2 = Math.max(0, Math.min(width, to * width));
+  const accent = themeColor("--bar-played", "#3794ff");
+
+  ctx.save();
+  ctx.globalAlpha = 0.2;
+  ctx.fillStyle = accent;
+  ctx.fillRect(x1, 0, Math.max(1, x2 - x1), height);
+  ctx.globalAlpha = 0.95;
+  ctx.fillRect(x1 - 1, 0, 2, height);
+  ctx.fillRect(x2 - 1, 0, 2, height);
+  ctx.restore();
 }
 
 function tick() {
@@ -232,6 +261,22 @@ function prevTrack() {
   select(queueIndex - 1);
 }
 
+function stopSelecting() {
+  selecting = false;
+  document.body.classList.remove("selecting");
+}
+
+function startSeparation(from, to) {
+  if (separating) {
+    return;
+  }
+  separating = true;
+  ui.sep.classList.add("busy");
+  ui.sep.textContent = "…";
+  setState("select", `separating ${clock(from)}–${clock(to)}…`);
+  post("separate", { start: from, end: to });
+}
+
 /* ---------- audio events ---------- */
 
 audio.addEventListener("play", () => {
@@ -270,6 +315,23 @@ ui.loop.addEventListener("click", () => {
   persist();
 });
 
+ui.sep.addEventListener("click", () => {
+  if (separating) {
+    return;
+  }
+  if (selecting) {
+    stopSelecting();
+    setState(peaks ? "ready" : "loading");
+    return;
+  }
+  if (!(audio.duration > 0)) {
+    return;
+  }
+  selecting = true;
+  document.body.classList.add("selecting");
+  setState("select", "drag across the waveform to choose the range");
+});
+
 ui.rate.addEventListener("change", () => {
   rate = Number(ui.rate.value) || 1;
   audio.preservesPitch = false;
@@ -286,18 +348,37 @@ ui.volume.addEventListener("input", () => {
 });
 
 ui.canvas.addEventListener("pointerdown", (event) => {
-  dragging = true;
+  const width = ui.canvas.clientWidth;
+  const fraction = Math.min(1, Math.max(0, event.offsetX / width));
   ui.canvas.setPointerCapture(event.pointerId);
-  seekTo(event.offsetX / ui.canvas.clientWidth);
+  if (selecting) {
+    const duration = audio.duration || 0;
+    if (duration <= 0) {
+      return;
+    }
+    dragging = "select";
+    selA = fraction * duration;
+    selB = selA;
+    draw(audio.currentTime / duration);
+    return;
+  }
+  dragging = "seek";
+  seekTo(fraction);
 });
 
 ui.canvas.addEventListener("pointermove", (event) => {
   const width = ui.canvas.clientWidth;
-  if (dragging) {
-    seekTo(event.offsetX / width);
+  const fraction = Math.min(1, Math.max(0, event.offsetX / width));
+
+  if (dragging === "select") {
+    const duration = audio.duration || 0;
+    selB = fraction * duration;
+    draw(duration > 0 ? audio.currentTime / duration : 0);
+  } else if (dragging === "seek") {
+    seekTo(fraction);
   }
+
   if (Number.isFinite(audio.duration) && audio.duration > 0) {
-    const fraction = Math.min(1, Math.max(0, event.offsetX / width));
     ui.tip.hidden = false;
     ui.tip.textContent = clock(fraction * audio.duration);
     ui.tip.style.left = `${Math.min(width - 30, Math.max(30, event.offsetX))}px`;
@@ -309,8 +390,20 @@ ui.canvas.addEventListener("pointerleave", () => {
 });
 
 ui.canvas.addEventListener("pointerup", (event) => {
-  dragging = false;
   ui.canvas.releasePointerCapture(event.pointerId);
+  if (dragging === "select") {
+    dragging = null;
+    const from = Math.min(selA, selB);
+    const to = Math.max(selA, selB);
+    if (to - from >= 0.5) {
+      stopSelecting();
+      startSeparation(from, to);
+    } else {
+      setState("select", "drag a longer range (at least 0.5s)");
+    }
+    return;
+  }
+  dragging = null;
 });
 
 window.addEventListener("resize", () => {
@@ -377,6 +470,13 @@ document.addEventListener("keydown", (event) => {
       event.preventDefault();
       audio.currentTime = Math.max(0, (audio.duration || 0) - 0.25);
       break;
+    case "Escape":
+      stopSelecting();
+      selA = null;
+      selB = null;
+      setState(peaks ? "ready" : "loading");
+      draw(audio.duration ? audio.currentTime / audio.duration : 0);
+      break;
   }
 });
 
@@ -403,6 +503,9 @@ async function loadTrack(payload) {
   queueIndex = payload.index || 0;
   queueCount = payload.count || 1;
   currentName = payload.name || "myVSCPlayer";
+  selA = null;
+  selB = null;
+  stopSelecting();
 
   audio.pause();
   stopTicking();
@@ -467,6 +570,17 @@ window.addEventListener("message", (event) => {
   }
   if (message.type === "track") {
     void loadTrack(message);
+  } else if (message.type === "sep-state") {
+    if (message.phase === "running") {
+      ui.sep.classList.add("busy");
+      ui.sep.textContent = "…";
+      setState("select", message.message || "separating…");
+    } else {
+      separating = false;
+      ui.sep.classList.remove("busy");
+      ui.sep.textContent = "SEP";
+      setState(message.phase === "error" ? "error" : "message", message.message || "");
+    }
   } else if (message.type === "error") {
     setState("error", message.message || "error");
   }

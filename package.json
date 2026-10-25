@@ -2,7 +2,7 @@
   "name": "myvscplayer",
   "displayName": "myVSCPlayer",
   "description": "Audio player inside VS Code: waveform seek, folder queue, keyboard transport, status bar.",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "jumang4423",
   "license": "MIT",
   "repository": {
@@ -105,6 +105,21 @@
           ],
           "default": "folder",
           "description": "What prev/next should walk through."
+        },
+        "myVSCPlayer.demucsCommand": {
+          "type": "string",
+          "default": "demucs",
+          "description": "Command used for stem separation (SEP button): `demucs`, `python3 -m demucs`, or an absolute path."
+        },
+        "myVSCPlayer.stemModel": {
+          "type": "string",
+          "default": "htdemucs",
+          "description": "Demucs model, e.g. `htdemucs`, `htdemucs_ft`, `mdx_extra`."
+        },
+        "myVSCPlayer.ffmpegPath": {
+          "type": "string",
+          "default": "ffmpeg",
+          "description": "ffmpeg executable used to cut the selected range before separation."
         }
       }
     }

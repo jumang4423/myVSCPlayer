@@ -16,6 +16,8 @@ status bar — instead of the built-in one-line `<audio>` control.
   octave up instead of being time-stretched; 0.5x drops an octave
 - **Keyboard** — `Space` `←` `→` `↑` `↓` `N` `P` `L` `Home` `End`
 - **Status bar** — shows the current track, click to reveal the player
+- **SEP** — drag a range on the waveform and stem-separate just that range into
+  `<song>_separated/` (needs demucs)
 - **Persistence** — volume, speed and loop survive reopening the tab
 - **Remote-friendly** — bytes are read through `vscode.workspace.fs`, so Remote SSH and
   Dev Containers play locally in the webview
@@ -57,6 +59,29 @@ If another extension already claims audio files, right-click the file →
 | --- | --- | --- |
 | `myVSCPlayer.autoplay` | `false` | Start playing when a file is opened |
 | `myVSCPlayer.queueMode` | `folder` | `folder` builds the queue from sibling audio files, `single` disables prev/next |
+
+## Stem separation (SEP)
+
+1. Press **SEP** (left of `LOOP`) — the panel goes into range mode.
+2. Drag across the waveform. On release, that range is separated.
+3. Results land in `<songname>_separated/` next to the audio file:
+   `vocals.wav`, `drums.wav`, `bass.wav`, `other.wav`.
+   Later runs never overwrite: they write `vocals_2.wav`, `vocals_3.wav`, …
+
+Pipeline: `ffmpeg -ss A -to B` cuts the range to a temp wav → `demucs -n htdemucs -o <tmp>` →
+the four stems are copied into place, and the temp directory is removed. `Esc` clears the
+selection and leaves range mode.
+
+Requirements:
+
+```sh
+pipx install demucs        # or python3 -m pip install --user demucs
+brew install ffmpeg        # ffmpeg must be on PATH
+```
+
+Settings: `myVSCPlayer.demucsCommand` (default `demucs`, also accepts `python3 -m demucs`),
+`myVSCPlayer.stemModel` (default `htdemucs`), `myVSCPlayer.ffmpegPath` (default `ffmpeg`).
+Only local files are supported; separation is skipped for remote/virtual documents.
 
 ## How it works
 

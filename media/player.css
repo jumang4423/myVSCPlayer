@@ -63,6 +63,23 @@ body[data-state="ready"] .hint {
   display: none;
 }
 
+body[data-state="message"] .hint,
+body[data-state="error"] .hint,
+body[data-state="select"] .hint {
+  inset: auto 12px 12px 12px;
+  display: block;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--vscode-editorWidget-background, rgba(18, 18, 18, 0.92));
+  color: var(--vscode-foreground);
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 body[data-state="error"] .hint {
   color: var(--vscode-errorForeground, #f48771);
 }
@@ -187,6 +204,19 @@ button.pill.active {
   color: var(--vscode-button-foreground, #fff);
   background: var(--vscode-focusBorder, #3794ff);
   border-color: transparent;
+}
+
+button.pill.busy {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+body.selecting canvas {
+  cursor: crosshair;
+}
+
+body.selecting .stage {
+  border-color: var(--vscode-focusBorder, #3794ff);
 }
 
 .clock {
