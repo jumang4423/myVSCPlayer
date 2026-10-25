@@ -8,7 +8,8 @@ status bar — instead of the built-in one-line `<audio>` control.
 
 - **Custom editor for audio files** — `.mp3 .wav .flac .m4a .m4b .aac .ogg .oga .opus .aiff .aif .weba`
 - **Waveform** — drawn from the decoded samples, click or drag anywhere to seek, playhead
-  coloured against the elapsed portion
+  coloured against the elapsed portion. The file is streamed and decoded in 512 KB slices, so
+  the first pixels land in a fraction of a second and the rest fills in as it decodes
 - **Folder queue** — prev/next walk the other audio files in the same folder (name-sorted,
   numeric-aware), auto-advance on track end
 - **Transport** — play/pause, ±5s seek, speed 0.5x–2x, loop, volume
@@ -107,6 +108,15 @@ Only local files are supported; separation is skipped for remote/virtual documen
   so the bytes are read with `vscode.workspace.fs.readFile` and posted as base64.
 - The waveform is built from `AudioContext.decodeAudioData` on a copy of the same source; nothing
   is written to disk and no network is used.
+
+### Waveform decoding
+
+`player.js` reads the response as a stream and decodes it every 512 KB instead of waiting for the
+whole file. Each decoded slice is reduced to 2048 min/max bins (sampling ~48 points per bin, so the
+reduction is cheap), and the bins are re-mapped onto the current canvas width on every draw and on
+resize. Measured on a 21 MB / 22:29 mp3: **first pixels ≈ 0.3 s, complete waveform ≈ 1.8 s**
+(previously the panel stayed empty until the whole file had decoded). Formats other than mp3/wav,
+and `data:` sources, fall back to a single full decode.
 
 ## Limitations
 

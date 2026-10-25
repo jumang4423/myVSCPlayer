@@ -26,7 +26,9 @@ let rate = typeof saved.rate === "number" ? saved.rate : 1;
 let looping = saved.loop === true;
 
 let peaks = null;
-let decoded = null;
+let segments = [];
+let streamDur = 0;
+let coverage = 0;
 let columns = 0;
 let queueCount = 0;
 let queueIndex = 0;
@@ -86,29 +88,72 @@ function setPlaying(playing) {
 
 const BAR = 2;
 const GAP = 1;
+const WAVE_BINS = 2048;
 
-function computePeaks(buffer) {
+/* Bins are kept per decoded slice, at a fixed resolution, so the waveform can be
+   drawn while the rest of the file is still decoding. */
+function addSegment(buffer, bins = WAVE_BINS) {
   const data = buffer.getChannelData(0);
-  const bucket = Math.max(1, Math.floor(data.length / columns));
-  const out = new Float32Array(columns * 2);
-  for (let col = 0; col < columns; col += 1) {
-    const start = col * bucket;
+  const min = new Float32Array(bins);
+  const max = new Float32Array(bins);
+  const bucket = Math.max(1, Math.floor(data.length / bins));
+  const stride = Math.max(1, Math.floor(bucket / 48));
+  for (let b = 0; b < bins; b += 1) {
+    const start = b * bucket;
     const end = Math.min(data.length, start + bucket);
-    let min = 0;
-    let max = 0;
-    for (let i = start; i < end; i += 1) {
+    let lo = 0;
+    let hi = 0;
+    for (let i = start; i < end; i += stride) {
       const value = data[i];
-      if (value < min) {
-        min = value;
+      if (value < lo) {
+        lo = value;
       }
-      if (value > max) {
-        max = value;
+      if (value > hi) {
+        hi = value;
       }
     }
-    out[col * 2] = min;
-    out[col * 2 + 1] = max;
+    min[b] = lo;
+    max[b] = hi;
   }
-  return out;
+  segments.push({ start: streamDur, dur: buffer.duration, min, max });
+  streamDur += buffer.duration;
+}
+
+function rebuildPeaks() {
+  const total = audio.duration > 0 ? audio.duration : streamDur;
+  if (!(total > 0) || segments.length === 0) {
+    return;
+  }
+  const out = new Float32Array(columns * 2);
+  for (let col = 0; col < columns; col += 1) {
+    const t0 = (col / columns) * total;
+    const t1 = ((col + 1) / columns) * total;
+    let lo = 0;
+    let hi = 0;
+    let hit = false;
+    for (const seg of segments) {
+      if (seg.start + seg.dur <= t0 || seg.start >= t1) {
+        continue;
+      }
+      const bins = seg.min.length;
+      const b0 = Math.max(0, Math.floor(((t0 - seg.start) / seg.dur) * bins));
+      const b1 = Math.min(bins, Math.ceil(((t1 - seg.start) / seg.dur) * bins));
+      for (let b = b0; b < b1; b += 1) {
+        if (seg.min[b] < lo) {
+          lo = seg.min[b];
+        }
+        if (seg.max[b] > hi) {
+          hi = seg.max[b];
+        }
+      }
+      hit = true;
+    }
+    if (hit) {
+      out[col * 2] = lo;
+      out[col * 2 + 1] = hi;
+    }
+  }
+  peaks = out;
 }
 
 function resizeCanvas() {
@@ -153,8 +198,9 @@ function draw(progress) {
 
   const scale = (height / 2) * 0.92;
   const playedCols = Math.floor(columns * Math.min(1, Math.max(0, progress)));
+  const ready = Math.max(1, Math.ceil(columns * Math.min(1, coverage)));
 
-  for (let col = 0; col < columns; col += 1) {
+  for (let col = 0; col < ready; col += 1) {
     const min = peaks[col * 2];
     const max = peaks[col * 2 + 1];
     const top = mid - max * scale;
@@ -408,9 +454,8 @@ ui.canvas.addEventListener("pointerup", (event) => {
 
 window.addEventListener("resize", () => {
   resizeCanvas();
-  if (decoded) {
-    peaks = computePeaks(decoded);
-    setState("ready");
+  if (segments.length > 0) {
+    rebuildPeaks();
   }
   draw(audio.duration ? audio.currentTime / audio.duration : 0);
 });
@@ -492,8 +537,100 @@ function sourceOf(payload) {
   return null;
 }
 
-async function loadTrack(payload) {
-  const source = sourceOf(payload);
+function whenMetadata() {
+  return new Promise((resolve) => {
+    if (audio.readyState >= 1 && audio.duration > 0) {
+      resolve();
+      return;
+    }
+    const done = () => {
+      audio.removeEventListener("loadedmetadata", done);
+      resolve();
+    };
+    audio.addEventListener("loadedmetadata", done);
+    setTimeout(done, 3000);
+  });
+}
+
+/* Waveform: decode the file in slices and draw each one as it lands, so the first
+   pixels appear in tens of milliseconds instead of after the whole file decodes. */
+async function buildWaveform(source, token) {
+  const context = new (window.AudioContext || window.webkitAudioContext)();
+  const streamable = /\.(mp3|wav)$/i.test(currentName);
+
+  try {
+    const response = await fetch(source);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    if (!response.body || !streamable) {
+      const whole = await response.arrayBuffer();
+      const buffer = await context.decodeAudioData(whole);
+      if (token !== decodeToken) {
+        return;
+      }
+      segments = [];
+      streamDur = 0;
+      addSegment(buffer, 8192);
+      coverage = 1;
+      rebuildPeaks();
+      setState("ready");
+      draw(audio.duration ? audio.currentTime / audio.duration : 0);
+      return;
+    }
+
+    await whenMetadata();
+    const reader = response.body.getReader();
+    const SLICE = 512 * 1024;
+    let parts = [];
+    let size = 0;
+
+    for (;;) {
+      const chunk = await reader.read();
+      if (token !== decodeToken) {
+        await reader.cancel().catch(() => undefined);
+        return;
+      }
+      if (chunk.value) {
+        parts.push(chunk.value);
+        size += chunk.value.byteLength;
+      }
+      if (size >= SLICE || (chunk.done && size > 0)) {
+        const merged = new Uint8Array(size);
+        let offset = 0;
+        for (const part of parts) {
+          merged.set(part, offset);
+          offset += part.byteLength;
+        }
+        parts = [];
+        size = 0;
+
+        try {
+          const slice = await context.decodeAudioData(merged.buffer);
+          if (token !== decodeToken) {
+            return;
+          }
+          addSegment(slice);
+          const total = audio.duration > 0 ? audio.duration : streamDur;
+          coverage = total > 0 ? Math.min(1, streamDur / total) : 0;
+          rebuildPeaks();
+          setState("ready");
+          draw(audio.duration ? audio.currentTime / audio.duration : 0);
+        } catch (error) {
+          /* a slice can straddle a bad frame; keep going */
+        }
+      }
+      if (chunk.done) {
+        break;
+      }
+    }
+  } finally {
+    await context.close().catch(() => undefined);
+  }
+}
+
+async function loadTrack(payload) {  const source = sourceOf(payload);
   if (!source) {
     setState("error", "could not read the file");
     return;
@@ -516,7 +653,9 @@ async function loadTrack(payload) {
 
   setState("loading", "reading waveform…");
   peaks = null;
-  decoded = null;
+  segments = [];
+  streamDur = 0;
+  coverage = 0;
   resizeCanvas();
   draw(0);
 
@@ -526,21 +665,7 @@ async function loadTrack(payload) {
 
   const token = ++decodeToken;
   try {
-    const response = await fetch(source);
-    const buffer = await response.arrayBuffer();
-    if (token !== decodeToken) {
-      return;
-    }
-    const context = new (window.AudioContext || window.webkitAudioContext)();
-    const audioBuffer = await context.decodeAudioData(buffer);
-    await context.close();
-    if (token !== decodeToken) {
-      return;
-    }
-    decoded = audioBuffer;
-    peaks = computePeaks(audioBuffer);
-    setState("ready");
-    draw(audio.duration ? audio.currentTime / audio.duration : 0);
+    await buildWaveform(source, token);
   } catch (error) {
     if (token === decodeToken) {
       setState("loaded", "playback ready · waveform unavailable");

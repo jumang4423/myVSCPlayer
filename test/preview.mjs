@@ -46,6 +46,7 @@ const stub = `<script>
   });
   window.addEventListener("load", () => {
     setTimeout(() => {
+      window.__loadStart = performance.now();
       window.postMessage(
         {
           type: "track",
