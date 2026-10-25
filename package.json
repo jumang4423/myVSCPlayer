@@ -1,0 +1,90 @@
+{
+  "name": "myvscplayer",
+  "displayName": "myVSCPlayer",
+  "description": "Audio player inside VS Code: waveform seek, folder queue, keyboard transport, status bar.",
+  "version": "0.1.0",
+  "publisher": "jumang4423",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jumang4423/myVSCPlayer.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "audio",
+    "music",
+    "player",
+    "mp3",
+    "waveform"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "myVSCPlayer.audio.focus",
+        "title": "myVSCPlayer: Focus Player"
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "myVSCPlayer.audio",
+        "displayName": "myVSCPlayer",
+        "priority": "default",
+        "selector": [
+          { "filenamePattern": "*.mp3" },
+          { "filenamePattern": "*.MP3" },
+          { "filenamePattern": "*.wav" },
+          { "filenamePattern": "*.WAV" },
+          { "filenamePattern": "*.flac" },
+          { "filenamePattern": "*.FLAC" },
+          { "filenamePattern": "*.m4a" },
+          { "filenamePattern": "*.M4A" },
+          { "filenamePattern": "*.aac" },
+          { "filenamePattern": "*.ogg" },
+          { "filenamePattern": "*.oga" },
+          { "filenamePattern": "*.opus" },
+          { "filenamePattern": "*.aiff" },
+          { "filenamePattern": "*.aif" },
+          { "filenamePattern": "*.weba" }
+        ]
+      }
+    ],
+    "configuration": {
+      "title": "myVSCPlayer",
+      "properties": {
+        "myVSCPlayer.autoplay": {
+          "type": "boolean",
+          "default": false,
+          "description": "Start playing as soon as an audio file is opened."
+        },
+        "myVSCPlayer.queueMode": {
+          "type": "string",
+          "enum": ["folder", "single"],
+          "enumDescriptions": [
+            "Prev/next walks every audio file in the same folder.",
+            "Disable the queue; prev/next do nothing."
+          ],
+          "default": "folder",
+          "description": "What prev/next should walk through."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -w -p ./",
+    "vscode:prepublish": "npm run compile",
+    "package": "npx --yes @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}
