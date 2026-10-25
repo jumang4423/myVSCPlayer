@@ -26,6 +26,7 @@ let rate = typeof saved.rate === "number" ? saved.rate : 1;
 let looping = saved.loop === true;
 
 let peaks = null;
+let decoded = null;
 let columns = 0;
 let trackCount = 0;
 let trackIndex = 0;
@@ -265,13 +266,10 @@ ui.canvas.addEventListener("pointerup", (event) => {
 });
 
 window.addEventListener("resize", () => {
-  const hadPeaks = peaks;
   resizeCanvas();
-  peaks = null;
-  if (hadPeaks) {
-    /* recompute lazily on next track load */
-    ui.hint.hidden = false;
-    ui.hint.textContent = "resize — reopen the file to redraw the waveform";
+  if (decoded) {
+    peaks = computePeaks(decoded);
+    ui.hint.hidden = true;
   }
   draw(audio.duration ? audio.currentTime / audio.duration : 0);
 });
@@ -347,6 +345,8 @@ async function loadTrack(payload) {
     return;
   }
 
+  const wasPlaying = !audio.paused;
+
   trackIndex = payload.index || 0;
   trackCount = payload.count || 1;
   ui.name.textContent = payload.name || "audio";
@@ -364,12 +364,13 @@ async function loadTrack(payload) {
   audio.src = objectUrl;
   audio.load();
 
-  if (payload.autoplay) {
+  if (payload.autoplay || wasPlaying) {
     audio.play().catch(() => undefined);
   }
 
   /* waveform */
   peaks = null;
+  decoded = null;
   resizeCanvas();
   ui.hint.hidden = false;
   ui.hint.textContent = "decoding…";
@@ -384,6 +385,7 @@ async function loadTrack(payload) {
     if (token !== decodeToken) {
       return;
     }
+    decoded = buffer;
     peaks = computePeaks(buffer);
     ui.meta.textContent = `${(buffer.sampleRate / 1000).toFixed(1)} kHz · ${buffer.numberOfChannels === 1 ? "mono" : "stereo"} · ${clock(buffer.duration)}`;
     ui.hint.hidden = true;

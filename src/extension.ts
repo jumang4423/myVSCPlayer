@@ -102,7 +102,6 @@ class AudioSession {
       enableScripts: true,
       localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, "media")],
     };
-    webview.html = this.html(webview);
 
     webview.onDidReceiveMessage(async (message: unknown) => {
       if (!message || typeof message !== "object") {
@@ -125,6 +124,7 @@ class AudioSession {
       }
     });
 
+    webview.html = this.html(webview);
     this.panel.title = path.basename(this.sourceUri.fsPath);
   }
 
