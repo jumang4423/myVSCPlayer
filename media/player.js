@@ -5,9 +5,6 @@ const audio = new Audio();
 audio.preload = "auto";
 
 const ui = {
-  title: document.getElementById("title"),
-  meta: document.getElementById("meta"),
-  queue: document.getElementById("queue"),
   play: document.getElementById("play"),
   prev: document.getElementById("prev"),
   next: document.getElementById("next"),
@@ -32,6 +29,7 @@ let decoded = null;
 let columns = 0;
 let queueCount = 0;
 let queueIndex = 0;
+let currentName = "myVSCPlayer";
 let dragging = false;
 let frame = 0;
 let decodeToken = 0;
@@ -239,14 +237,14 @@ function prevTrack() {
 audio.addEventListener("play", () => {
   setPlaying(true);
   startTicking();
-  post("status", { name: ui.title.textContent, playing: true });
+  post("status", { name: currentName, playing: true });
 });
 
 audio.addEventListener("pause", () => {
   setPlaying(false);
   stopTicking();
   draw(audio.duration ? audio.currentTime / audio.duration : 0);
-  post("status", { name: ui.title.textContent, playing: false });
+  post("status", { name: currentName, playing: false });
 });
 
 audio.addEventListener("loadedmetadata", () => {
@@ -404,11 +402,7 @@ async function loadTrack(payload) {
   const wasPlaying = !audio.paused;
   queueIndex = payload.index || 0;
   queueCount = payload.count || 1;
-
-  ui.title.textContent = payload.name || "audio";
-  ui.queue.hidden = queueCount <= 1;
-  ui.queue.textContent = queueCount > 1 ? `${queueIndex + 1} / ${queueCount}` : "";
-  document.title = payload.name || "myVSCPlayer";
+  currentName = payload.name || "myVSCPlayer";
 
   audio.pause();
   stopTicking();
@@ -442,16 +436,10 @@ async function loadTrack(payload) {
     }
     decoded = audioBuffer;
     peaks = computePeaks(audioBuffer);
-    ui.meta.textContent = [
-      `${(audioBuffer.sampleRate / 1000).toFixed(1)} kHz`,
-      audioBuffer.numberOfChannels === 1 ? "mono" : "stereo",
-      clock(audioBuffer.duration),
-    ].join(" · ");
     setState("ready");
     draw(audio.duration ? audio.currentTime / audio.duration : 0);
   } catch (error) {
     if (token === decodeToken) {
-      ui.meta.textContent = "";
       setState("loaded", "playback ready · waveform unavailable");
     }
   }
