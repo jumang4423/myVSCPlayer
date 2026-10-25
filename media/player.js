@@ -87,8 +87,9 @@ function describe(name, album) {
   return { title: cleaned || "myVSCPlayer", artist: album || "" };
 }
 
-function setState(state, message) {  document.body.dataset.state = state;
-  if (message) {
+function setState(state, message) {
+  document.body.dataset.state = state;
+  if (message !== undefined) {
     ui.hint.textContent = message;
   }
 }
@@ -602,81 +603,97 @@ function whenMetadata() {
 }
 
 /* Waveform: decode the file in slices and draw each one as it lands, so the first
-   pixels appear in tens of milliseconds instead of after the whole file decodes. */
+   pixels appear in tens of milliseconds instead of after the whole file decodes.
+   Only mp3 is streamed — a WAV slice without its RIFF header cannot be decoded, so
+   wav and everything else goes through a single decode. */
 async function buildWaveform(source, token) {
   const context = new (window.AudioContext || window.webkitAudioContext)();
-  const streamable = /\.(mp3|wav)$/i.test(currentName);
 
   try {
-    const response = await fetch(source);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    if (!response.body || !streamable) {
-      const whole = await response.arrayBuffer();
-      const buffer = await context.decodeAudioData(whole);
-      if (token !== decodeToken) {
+    if (/\.mp3$/i.test(currentName)) {
+      const streamed = await streamDecode(source, context, token);
+      if (streamed || token !== decodeToken) {
         return;
       }
-      segments = [];
-      streamDur = 0;
-      addSegment(buffer, 8192);
-      coverage = 1;
-      rebuildPeaks();
-      setState("ready");
-      draw(audio.duration ? audio.currentTime / audio.duration : 0);
-      return;
     }
-
-    await whenMetadata();
-    const reader = response.body.getReader();
-    const SLICE = 512 * 1024;
-    let parts = [];
-    let size = 0;
-
-    for (;;) {
-      const chunk = await reader.read();
-      if (token !== decodeToken) {
-        await reader.cancel().catch(() => undefined);
-        return;
-      }
-      if (chunk.value) {
-        parts.push(chunk.value);
-        size += chunk.value.byteLength;
-      }
-      if (size >= SLICE || (chunk.done && size > 0)) {
-        const merged = new Uint8Array(size);
-        let offset = 0;
-        for (const part of parts) {
-          merged.set(part, offset);
-          offset += part.byteLength;
-        }
-        parts = [];
-        size = 0;
-
-        try {
-          const slice = await context.decodeAudioData(merged.buffer);
-          if (token !== decodeToken) {
-            return;
-          }
-          addSegment(slice);
-          const total = audio.duration > 0 ? audio.duration : streamDur;
-          coverage = total > 0 ? Math.min(1, streamDur / total) : 0;
-          rebuildPeaks();
-          setState("ready");
-          draw(audio.duration ? audio.currentTime / audio.duration : 0);
-        } catch (error) {
-          /* a slice can straddle a bad frame; keep going */
-        }
-      }
-      if (chunk.done) {
-        break;
-      }
-    }
+    await decodeWhole(source, context, token);
   } finally {
     await context.close().catch(() => undefined);
   }
+}
+
+async function decodeWhole(source, context, token) {
+  const response = await fetch(source);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  const buffer = await context.decodeAudioData(await response.arrayBuffer());
+  if (token !== decodeToken) {
+    return;
+  }
+  segments = [];
+  streamDur = 0;
+  addSegment(buffer, 8192);
+  coverage = 1;
+  rebuildPeaks();
+  setState("ready");
+  draw(audio.duration ? audio.currentTime / audio.duration : 0);
+}
+
+async function streamDecode(source, context, token) {
+  const response = await fetch(source);
+  if (!response.ok || !response.body) {
+    return false;
+  }
+
+  await whenMetadata();
+  const reader = response.body.getReader();
+  const SLICE = 512 * 1024;
+  let parts = [];
+  let size = 0;
+
+  for (;;) {
+    const chunk = await reader.read();
+    if (token !== decodeToken) {
+      await reader.cancel().catch(() => undefined);
+      return true;
+    }
+    if (chunk.value) {
+      parts.push(chunk.value);
+      size += chunk.value.byteLength;
+    }
+    if (size >= SLICE || (chunk.done && size > 0)) {
+      const merged = new Uint8Array(size);
+      let offset = 0;
+      for (const part of parts) {
+        merged.set(part, offset);
+        offset += part.byteLength;
+      }
+      parts = [];
+      size = 0;
+
+      try {
+        const slice = await context.decodeAudioData(merged.buffer);
+        if (token !== decodeToken) {
+          return true;
+        }
+        addSegment(slice);
+        const total = audio.duration > 0 ? audio.duration : streamDur;
+        coverage = total > 0 ? Math.min(1, streamDur / total) : 0;
+        rebuildPeaks();
+        setState("ready");
+        draw(audio.duration ? audio.currentTime / audio.duration : 0);
+      } catch (error) {
+        /* a slice can straddle a bad frame; keep going */
+      }
+    }
+    if (chunk.done) {
+      break;
+    }
+  }
+
+  /* Nothing decoded (unusual container/frame layout): let the caller do a full decode. */
+  return segments.length > 0;
 }
 
 async function loadTrack(payload) {  const source = sourceOf(payload);
@@ -704,7 +721,7 @@ async function loadTrack(payload) {  const source = sourceOf(payload);
   ui.elapsed.textContent = "0:00";
   ui.total.textContent = "0:00";
 
-  setState("loading", "reading waveform…");
+  setState("loading", "");
   peaks = null;
   segments = [];
   streamDur = 0;
