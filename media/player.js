@@ -460,6 +460,10 @@ ui.canvas.addEventListener("pointerdown", (event) => {
   }
   dragging = "seek";
   seekTo(fraction);
+  /* Touching the waveform starts playback right there. */
+  if (audio.paused && audio.src) {
+    audio.play().catch(() => undefined);
+  }
 });
 
 ui.canvas.addEventListener("pointermove", (event) => {

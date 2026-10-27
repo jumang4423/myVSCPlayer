@@ -8,9 +8,10 @@ status bar — instead of the built-in one-line `<audio>` control.
 
 - **Custom editor for audio files** — `.mp3 .wav .flac .m4a .m4b .aac .ogg .oga .opus .aiff .aif .weba`
 - **Waveform** — SoundCloud-style bars that grow from the bottom edge, click or drag anywhere
-  to seek, played portion in orange. Each track is normalised to its own peak (98th percentile,
-  mild power curve) so quiet tracks do not draw as a flat line. The file is streamed and decoded
-  in 512 KB slices, so the first pixels land in a fraction of a second
+  to seek and start playing from that point, played portion in orange. Each track is normalised
+  to its own peak (98th percentile, mild power curve) so quiet tracks do not draw as a flat line.
+  The file is streamed and decoded in 512 KB slices, so the first pixels land in a fraction of
+  a second
 - **Folder queue** — prev/next walk the other audio files in the same folder (name-sorted,
   numeric-aware), auto-advance on track end
 - **Transport** — play/pause, ±5s seek, speed 0.5x–2x, loop, volume
